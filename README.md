@@ -1,2 +1,2 @@
-#Machine Turing
--Machine Turing written in golang
+# Machine Turing
+- Machine Turing written in golang
