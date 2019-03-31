@@ -1,0 +1,12 @@
+q0
+q5
+(q0,BBR,q1)
+(q1,aBR,q2)
+(q1,BBR,q5)
+(q2,aaR,q2)
+(q2,bbR,q2)
+(q2,BBL,q3)
+(q3,bBL,q4)
+(q4,aaL,q4)
+(q4,bbL,q4)
+(q4,BBR,q1)
