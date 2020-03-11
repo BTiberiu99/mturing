@@ -3,6 +3,7 @@ package machine
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -13,20 +14,51 @@ const (
 )
 
 type Machine struct {
-	Begin       string
-	End         []string
-	Transitions []Transition
-	Print       bool
+	begin       string
+	end         []string
+	transitions []Transition
+	isPrinting  bool
 }
 
-func (m *Machine) ConstructMachine(nameFile string) error {
-	file, err := os.Open(nameFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
+type Config struct {
+	NameFile string
+	Print    bool
+	Buffer   io.Reader
+}
 
-	m.Transitions = make([]Transition, 0)
+func NewMachine(conf *Config) (*Machine, error) {
+	machine := &Machine{
+		isPrinting: conf.Print,
+	}
+
+	file := conf.Buffer
+
+	if file == nil {
+		file, err := os.Open(conf.NameFile)
+
+		if err != nil {
+			return nil, err
+		}
+
+		defer file.Close()
+	}
+
+	err := machine.constructMachine(file)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return machine, nil
+}
+
+func (m *Machine) SetPrint(print bool) {
+	m.isPrinting = print
+}
+
+func (m *Machine) constructMachine(file io.Reader) error {
+
+	m.transitions = make([]Transition, 0)
 
 	scanner := bufio.NewScanner(file)
 	nrRow := 0
@@ -34,13 +66,13 @@ func (m *Machine) ConstructMachine(nameFile string) error {
 	//Take Begin Transition
 	nrRow++
 	if scanner.Scan() {
-		m.Begin = scanner.Text()
+		m.begin = scanner.Text()
 	} else {
-		fmt.Println("Nu exista niciun rand de parsat in " + nameFile)
+		fmt.Println("Nu exista niciun rand de parsat")
 	}
 
 	if scanner.Scan() {
-		m.End = strings.Split(scanner.Text(), ",")
+		m.end = strings.Split(scanner.Text(), ",")
 	}
 	for scanner.Scan() {
 		// fmt.Println(scanner.Text())
@@ -48,9 +80,12 @@ func (m *Machine) ConstructMachine(nameFile string) error {
 		row := match(scanner.Text())
 
 		items := strings.Split(row, ",")
+
 		items2 := strings.Split(items[1], "")
+
 		if len(items) == 3 && len(items2) == 3 {
 			dir := int8(-1)
+
 			if items2[2] == "R" {
 				dir = 2
 			} else if items2[2] == "S" {
@@ -58,17 +93,19 @@ func (m *Machine) ConstructMachine(nameFile string) error {
 			} else if items2[2] == "L" {
 				dir = 0
 			}
-			m.Transitions = append(m.Transitions, Transition{
-				Begin: items[0],
-				End:   items[2],
-				Do: TuringMovement{
-					Read:      items2[0],
-					Write:     items2[1],
-					Direction: dir,
+
+			m.transitions = append(m.transitions, Transition{
+				begin: items[0],
+				end:   items[2],
+				do: TuringMovement{
+					read:      items2[0],
+					write:     items2[1],
+					direction: dir,
 				},
 			})
+
 		} else {
-			fmt.Println("Eroare pe randul " + fmt.Sprintf("%d", nrRow) + " tranzitia trebuie sa fie de forma (q0,BBR,q1) - (trans, ReadWriteDirection ,trans)")
+			fmt.Println(fmt.Sprintf("Eroare pe randul %d tranzitia trebuie sa fie de forma (q0,BBR,q1) - (trans, ReadWriteDirection ,trans)", nrRow))
 
 		}
 	}
@@ -87,40 +124,54 @@ func match(s string) string {
 	return ""
 }
 
-func (m *Machine) PrintMachine() {
+func (m *Machine) Print() {
 
-	fmt.Printf("Inceput:%s\n", m.Begin)
-	fmt.Println("F=", m.End)
-	for _, trans := range m.Transitions {
-		move := trans.Do.ToString()
-		fmt.Println("(" + trans.Begin + "," + move + "," + trans.End + ")")
+	fmt.Printf("Inceput:%s\n", m.begin)
+	fmt.Println("F=", m.end)
+	for _, trans := range m.transitions {
+		fmt.Printf("(%s,%s,%s)\n", trans.begin, trans.do.ToString(), trans.end)
+	}
+}
+
+func (m *Machine) Speak(str ...interface{}) {
+	if m.isPrinting {
+		fmt.Println(str...)
 	}
 }
 
 func (m *Machine) ParseWord(word string) bool {
-	if m.Print {
-		fmt.Println("WORD:", word)
-	}
-	accepted := false
-	stop := 0
-	maximStop := 100000
+
+	m.Speak("WORD:", word)
+
+	var (
+		accepted  = false
+		stop      = 0
+		maximStop = 100000
+	)
+
 	letters := strings.Split(word, "")
 	lenWord := len(letters)
 	banda := make([]string, lenWord+2)
+
 	for i := range letters {
 		banda[i+1] = letters[i]
 	}
+
 	banda[0] = BLANK
 	banda[lenWord+1] = BLANK
 	j := 0
+
 	var currentTransition Transition
-	for _, trans := range m.Transitions {
-		if trans.Begin == m.Begin {
+
+	for _, trans := range m.transitions {
+		if trans.begin == m.begin {
 			currentTransition = trans
 			break
 		}
 	}
-	accepted = currentTransition.Final(m.End)
+
+	accepted = currentTransition.Final(m.end)
+
 	for !accepted {
 		stop++
 		if stop == maximStop {
@@ -130,37 +181,39 @@ func (m *Machine) ParseWord(word string) bool {
 
 		loop := true
 		for !accepted && loop {
-			loop = currentTransition.End == currentTransition.Begin
-			if currentTransition.Do.Read == banda[j] {
-				banda[j] = currentTransition.Do.Write
+			loop = currentTransition.end == currentTransition.begin
+			if currentTransition.do.read == banda[j] {
+				banda[j] = currentTransition.do.write
 
-				if currentTransition.Do.Direction == 0 {
+				if currentTransition.do.direction == 0 {
 					j--
-				} else if currentTransition.Do.Direction == 2 {
+				} else if currentTransition.do.direction == 2 {
 					j++
 				}
-				if m.Print {
-					fmt.Println(banda, "INDEX", j)
-				}
+
+				m.Speak(banda, "INDEX", j)
 			} else {
 				break
 			}
 		}
 		next := false
-		for i := range m.Transitions {
-			if banda[j] == m.Transitions[i].Do.Read && currentTransition.End == m.Transitions[i].Begin {
-				if m.Print {
-					fmt.Println("NEW TRANSITION", m.Transitions[i])
-				}
-				currentTransition = m.Transitions[i]
+
+		for i := range m.transitions {
+			if banda[j] == m.transitions[i].do.read && currentTransition.end == m.transitions[i].begin {
+
+				m.Speak("NEW TRANSITION", m.transitions[i])
+
+				currentTransition = m.transitions[i]
 				next = true
 				break
 			}
 		}
+
 		if !next {
 			break
 		}
-		accepted = currentTransition.Final(m.End)
+
+		accepted = currentTransition.Final(m.end)
 
 	}
 
@@ -168,14 +221,14 @@ func (m *Machine) ParseWord(word string) bool {
 }
 
 type Transition struct {
-	Begin string
-	End   string
-	Do    TuringMovement
+	begin string
+	end   string
+	do    TuringMovement
 }
 
 func (t *Transition) Final(finalTrans []string) bool {
 	for i := range finalTrans {
-		if t.Begin == finalTrans[i] || t.End == finalTrans[i] {
+		if t.begin == finalTrans[i] || t.end == finalTrans[i] {
 			return true
 		}
 	}
@@ -183,19 +236,22 @@ func (t *Transition) Final(finalTrans []string) bool {
 }
 
 type TuringMovement struct {
-	Direction int8 // true = "RIGHT" , false ="LEFT"
-	Read      string
-	Write     string
+	direction int8 // true = "RIGHT" , false ="LEFT"
+	read      string
+	write     string
 }
 
 func (mov *TuringMovement) ToString() string {
-	move := mov.Read + mov.Write
-	if mov.Direction == 0 {
+
+	move := mov.read + mov.write
+
+	if mov.direction == 0 {
 		move += "R"
-	} else if mov.Direction == 1 {
+	} else if mov.direction == 1 {
 		move += "S"
-	} else if mov.Direction == 2 {
+	} else if mov.direction == 2 {
 		move += "L"
 	}
+
 	return move
 }
