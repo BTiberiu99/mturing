@@ -71,11 +71,16 @@ func Run() {
 				fmt.Println("Introduceti cuvantul")
 				continue
 			}
+
+			if mch == nil {
+				fmt.Println("Construiti o masina intai!")
+				continue
+			}
 			accepted := mch.ParseWord(commands[1])
 			if accepted {
-				fmt.Println(commands[1], "este accepetat")
+				fmt.Println(commands[1], "este acceptat")
 			} else {
-				fmt.Println(commands[1], "nu este accepetat")
+				fmt.Println(commands[1], "nu este acceptat")
 			}
 			break
 		case commandsMachine[2].Name:
@@ -99,6 +104,10 @@ func Run() {
 			}
 			break
 		case commandsMachine[6].Name:
+			if mch == nil {
+				fmt.Println("Construiti o masina intai!")
+				continue
+			}
 			if len(commands) > 1 {
 				mch.SetPrint(commands[1] == "true")
 			} else {

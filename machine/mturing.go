@@ -2,6 +2,7 @@ package machine
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -26,24 +27,27 @@ type Config struct {
 	Buffer   io.Reader
 }
 
-func NewMachine(conf *Config) (*Machine, error) {
-	machine := &Machine{
+func NewMachine(conf *Config) (machine *Machine, err error) {
+	machine = &Machine{
 		isPrinting: conf.Print,
 	}
 
 	file := conf.Buffer
 
 	if file == nil {
-		file, err := os.Open(conf.NameFile)
+		f, err := os.Open(conf.NameFile)
 
 		if err != nil {
 			return nil, err
 		}
 
-		defer file.Close()
+		defer f.Close()
+
+		file = f
+
 	}
 
-	err := machine.constructMachine(file)
+	err = machine.constructMachine(file)
 
 	if err != nil {
 		return nil, err
@@ -56,7 +60,14 @@ func (m *Machine) SetPrint(print bool) {
 	m.isPrinting = print
 }
 
-func (m *Machine) constructMachine(file io.Reader) error {
+func (m *Machine) constructMachine(file io.Reader) (err error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+
+			err = errors.New(fmt.Sprint(r))
+		}
+	}()
 
 	m.transitions = make([]Transition, 0)
 
@@ -110,7 +121,9 @@ func (m *Machine) constructMachine(file io.Reader) error {
 		}
 	}
 
-	return scanner.Err()
+	err = scanner.Err()
+
+	return err
 }
 
 func match(s string) string {
